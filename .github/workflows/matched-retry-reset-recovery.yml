@@ -1,7 +1,7 @@
 name: Matched retry command
 on:
   push:
-    branches: [matched-retry-reset-01]
+    branches: [matched-retry-reset-02]
 permissions:
   contents: read
 jobs:

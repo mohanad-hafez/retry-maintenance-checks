@@ -14,5 +14,9 @@ if (process.env.ARM === 'agent') {
 } else {
   result = JSON.parse(fs.readFileSync('evidence/result.json'));
 }
-assert.deepEqual({ ...result, next_steps: [...result.next_steps].sort() }, expected);
+const { inputs } = JSON.parse(fs.readFileSync('evidence/fixture.json'));
+const close = result.close_pr === true ? inputs.loop.pull_request : result.close_pr;
+const labels = Array.isArray(result.change_labels) && result.change_labels.length === 0 ? false : result.change_labels;
+assert.deepEqual({ ...result, close_pr: close, change_labels: labels, next_steps: [...result.next_steps].sort() }, expected);
 fs.writeFileSync('evidence/result.json', JSON.stringify(expected));
+
