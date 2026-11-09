@@ -1,0 +1,89 @@
+name: Matched retry command
+on:
+  push:
+    branches: [matched-retry-reset-01]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    if: github.repository == 'mohanad-hafez/retry-maintenance-checks'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    permissions:
+      contents: read
+      copilot-requests: write
+      issues: read
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [agent, script]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install Copilot
+        if: matrix.arm == 'agent'
+        run: npm install --global @github/copilot@1.0.108
+      - name: Read the retry command and current state
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        env:
+          ARM: ${{ matrix.arm }}
+        with:
+          retries: 0
+          script: |
+            require('node:fs').mkdirSync('evidence')
+            await require('./.github/matched/retry-prepare.cjs')({ github, context })
+      - name: Validate the retry decision
+        env:
+          ARM: ${{ matrix.arm }}
+          GITHUB_TOKEN: ${{ matrix.arm == 'agent' && github.token || '' }}
+        run: |
+          if [ "$ARM" = agent ]; then
+            node -e 'const c=process.cwd(),m=c+"/.github/matched";console.log(JSON.stringify({mcpServers:{fixture:{type:"local",command:"node",args:[m+"/component_fixture.cjs",c+"/evidence/fixture.json",c+"/evidence/tools.jsonl"],tools:["*"]}}}))' > fixture-mcp.json
+            timeout 180s copilot --disable-builtin-mcps --disable-client-telemetry \
+              --additional-mcp-config=@fixture-mcp.json \
+              --available-tools=fixture-read_input,fixture-publish_result \
+              --allow-tool=fixture --no-ask-user --no-color --silent \
+              --prompt "$(cat .github/matched/retry-prompt.md)" > evidence/output.txt 2> evidence/diagnostics.txt
+          fi
+          node .github/matched/retry-arm.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: retry-${{ matrix.arm }}
+          path: evidence/
+          retention-days: 14
+  publish:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [agent, script]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: retry-${{ matrix.arm }}
+          path: evidence
+      - name: Apply the matched retry
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        env:
+          ARM: ${{ matrix.arm }}
+        with:
+          retries: 0
+          script: await require('./.github/matched/retry-publish.cjs')({ github, context })
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-retry-${{ matrix.arm }}
+          path: publication.json
+          retention-days: 14
