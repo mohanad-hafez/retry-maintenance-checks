@@ -1,0 +1,1 @@
+{"target":1,"close_pr":2,"close_reason":"stale PR closed by /retry (human sanction)","budget":"gh-aw budget: reset","change_labels":false,"next_steps":["invoke_plan","reapply_human_label"]}

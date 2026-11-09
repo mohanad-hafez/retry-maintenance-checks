@@ -1,0 +1,39 @@
+name: Matched retry command
+on:
+  push:
+    branches: [matched-retry-publication-01]
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [agent, script]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Restore the verified decisions
+        env:
+          ARM: ${{ matrix.arm }}
+        run: cp -r ".github/matched/verified-$ARM" evidence
+      - name: Apply the matched retry
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        env:
+          ARM: ${{ matrix.arm }}
+        with:
+          retries: 0
+          script: await require('./.github/matched/retry-publish.cjs')({ github, context })
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-retry-${{ matrix.arm }}
+          path: publication.json
+          retention-days: 14
